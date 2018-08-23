@@ -1,0 +1,8 @@
+[package]
+name = "julia"
+version = "0.1.0"
+authors = ["Dhruva Karkada <dkarkada@gmail.com>"]
+
+[dependencies]
+image = "*"
+num-complex = "0.2"
