@@ -6,3 +6,4 @@ authors = ["Dhruva Karkada <dkarkada@gmail.com>"]
 [dependencies]
 image = "*"
 num-complex = "0.2"
+regex = "1"

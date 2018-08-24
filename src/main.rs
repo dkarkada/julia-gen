@@ -1,8 +1,10 @@
 extern crate image;
 extern crate num_complex;
+extern crate regex;
 
 use num_complex::Complex;
 use std::env;
+use regex::Regex;
 
 /// Define some nice color palettes
 fn color_palette(pal: &str) -> [[u8; 3]; 5] {
@@ -34,10 +36,10 @@ fn color_palette(pal: &str) -> [[u8; 3]; 5] {
 /// 0 and 1 representing how many iterations it takes for a point
 /// to escape, and a `color_shift` value between 0 and 1 which allows
 /// you to slide between two color palettes.
-fn count_to_rgb(count: f64, color_shift: f64) -> [u8; 3] {
+fn count_to_rgb(count: f64, color_shift: f64, pal1: &str, pal2: &str) -> [u8; 3] {
 	// gradient colors
-	let color_palette_1 = color_palette("crystal");
-	let color_palette_2 = color_palette("crystal");
+	let color_palette_1 = color_palette(pal1);
+	let color_palette_2 = color_palette(pal2);
 	// count values that mark new colors in the gradient
 	let grads = [0.0, 0.32, 0.44, 0.8, 1.0];
 	// find which two colors we're between, and where in between
@@ -69,7 +71,7 @@ fn count_to_rgb(count: f64, color_shift: f64) -> [u8; 3] {
 }
 
 struct Params {
-	max_iter: u8,
+	max_iter: u32,
 	img_width: u32,
 	aspect_ratio: f64,
 	window_width: f64,
@@ -78,6 +80,8 @@ struct Params {
 	c_init: Complex<f64>,
 	c_final: Complex<f64>,
 	title: String,
+	palette1: String,
+	palette2: String,
 }
 
 impl Params {
@@ -91,24 +95,135 @@ impl Params {
 	}
 }
 
+fn parse_complex(cstr: &str) -> Result<Complex<f64>, &str> {
+	let re = Regex::new(r"^\[(\+|-)?\d*\.?\d+(\+|-)\d*\.?\d+i\]$").unwrap();
+	match re.captures(cstr) {
+		Some(caps) => {
+			let mch = caps.get(2).unwrap();
+			let real = &cstr[1..mch.start()];
+			let im = &cstr[mch.end()..cstr.len()-2];
+			match (real.parse::<f64>(), im.parse::<f64>()) {
+				(Ok(real), Ok(im)) => Ok(Complex::new(real, im)),
+				_ => Err("Bad format for complex number."),
+			}
+		},
+		None => Err("Bad format for complex number.")
+	}
+}
+
 fn construct_params(args: Vec<String>) -> Params {
-	let params = Params {
+	let mut params = Params {
 		max_iter: 255,
 		img_width: 192*2,
 		aspect_ratio: 16.0/9.0,
-		window_width: 0.64,
-		window_center: Complex::new(-0.385, 0.190),
-		num_frames:  1,
+		window_width: 2.64,
+		window_center: Complex::new(-0.385, 0.297),
+		num_frames: 1,
 		c_init: Complex::new(-0.747, 0.2),
 		c_final: Complex::new(-0.747, 0.2),
 		title: String::from("bean"),
+		palette1: String::from("crystal"),
+		palette2: String::from("cool"),
 	};
+	let mut ind = 1;
+	while ind < args.len()-1 {
+		let field = args[ind].to_lowercase();
+		let value = args[ind+1].as_str();
+		match field.as_str() {
+			"max_iter"|"mi"|"maxiter" => {
+				match value.parse::<u32>() {
+					Ok(val) => params.max_iter = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				} 
+			},
+			"img_width"|"width"|"w" => {
+				match value.parse::<u32>() {
+					Ok(val) => params.img_width = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"aspect_ratio"|"aspect"|"ar" => {
+				let re = Regex::new(r":").unwrap();
+				let splt: Vec<&str> = re.split(value).collect();
+				if splt.len() > 1 {
+					match (splt[0].parse::<u32>(), splt[1].parse::<u32>()) {
+						(Ok(val1), Ok(val2)) => params.aspect_ratio = val1 as f64/val2 as f64,
+						_ => println!("Error parsing value for {}.", field.as_str()),
+					}
+				}
+				else {
+					println!("Error parsing value for {}. Format: width:height.", field.as_str());
+				}
+			},
+			"dimensions"|"dim" => {
+				let re = Regex::new(r"x").unwrap();
+				let splt: Vec<&str> = re.split(value).collect();
+				if splt.len() > 1 {
+					match (splt[0].parse::<u32>(), splt[1].parse::<u32>()) {
+						(Ok(val1), Ok(val2)) => {
+							params.img_width  = val1;
+							params.aspect_ratio = val1 as f64/val2 as f64
+						},
+						_ => println!("Error parsing value for {}.", field.as_str()),
+					}
+				}
+				else {
+					println!("Error parsing value for {}. Format: widthxheight.", field.as_str());
+				}
+			},
+			"window_width"|"size"|"sz"|"ww" => {
+				match value.parse::<f64>() {
+					Ok(val) => params.window_width = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"window_center"|"center"|"cent" => {
+				match parse_complex(value) {
+					Ok(val) => params.window_center = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"num_frames"|"frames"|"nf" => {
+				match value.parse::<u64>() {
+					Ok(val) => params.num_frames = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"c_init"|"cinit"|"c1"|"c" => {
+				match parse_complex(value) {
+					Ok(val) => params.c_init = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"c_final"|"cfinal"|"c2" => {
+				match parse_complex(value) {
+					Ok(val) => params.c_final = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"title"|"filename"|"name" => {
+				params.title = String::from(value);
+			},
+			"palette1"|"pal1"|"p1"|"palette" => {
+				params.palette1 = String::from(value);
+			},
+			"palette2"|"pal2"|"p2" => {
+				params.palette2 = String::from(value);
+			},
+			_ => {
+				println!("Invalid keyword: {}", field);
+			}
+		}
+		ind += 2;
+	}
+	if ind < args.len() {
+		println!("Found keyword without argument: {}", args[ind].as_str());
+	}
 	params
 }
 
 fn main() {
 	let args: Vec<String> = env::args().collect();
-	println!("{:?}", args);
 	let params = construct_params(args);
 	// number of iterates per z-value
 	let max_iter = params.max_iter;
@@ -147,9 +262,9 @@ fn main() {
 			// strength of attraction between julia and z, from 0 to 1
 			let count: f64 = (count as f64) / 255.0;
 			let color_shift = (n as f64)/(num_frames as f64);
-			*pixel = image::Rgb(count_to_rgb(count, color_shift));
+			*pixel = image::Rgb(count_to_rgb(count, color_shift, &params.palette1, &params.palette2));
 		}
-		buf.save(format!("{}.png", params.title)).unwrap();
+		buf.save(format!("{}{}.png", params.title, n)).unwrap();
 	}
 
 }
