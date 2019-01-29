@@ -5,6 +5,7 @@ extern crate regex;
 use num_complex::Complex;
 use std::env;
 use regex::Regex;
+use std::f64::consts::PI;
 
 /// Define some nice color palettes
 fn color_palette(pal: &str) -> [[u8; 3]; 5] {
@@ -24,6 +25,16 @@ fn color_palette(pal: &str) -> [[u8; 3]; 5] {
 						[150, 220, 255],
 						[90, 90, 180],
 						[0, 0, 0]],
+		"sapling" => [[204, 236, 255],
+						[204, 236, 255],
+						[190, 224, 116],
+						[90, 60, 0],
+						[0, 0, 0]],
+		"firelotus" => [[20, 40, 81],
+						[72, 92, 117],
+						[255, 130, 159],
+						[255, 200, 43],
+						[255, 230, 158]],
 		_ => [[0, 0, 0],
 						[100, 100, 100],
 						[150, 150, 150],
@@ -77,6 +88,7 @@ struct Params {
 	window_width: f64,
 	window_center: Complex<f64>,
 	num_frames:  u64,
+	anim_loop:  u64,
 	c_init: Complex<f64>,
 	c_final: Complex<f64>,
 	title: String,
@@ -90,7 +102,14 @@ impl Params {
 			self.c_init
 		} else {
 			let transition: f64 = (n as f64)/((self.num_frames-1) as f64);
-			self.c_init + transition*(self.c_final-self.c_init)
+			if self.anim_loop == 0 {
+				self.c_init + transition*(self.c_final-self.c_init)
+			}
+			else {
+				let cent = (self.c_final+self.c_init)/2.;
+				let radius = (self.c_final-self.c_init).norm()/2.;
+				cent + Complex::from_polar(&radius, &(transition*2.*PI))
+			}
 		}
 	}
 }
@@ -101,7 +120,7 @@ fn parse_complex(cstr: &str) -> Result<Complex<f64>, &str> {
 		Some(caps) => {
 			let mch = caps.get(2).unwrap();
 			let real = &cstr[1..mch.start()];
-			let im = &cstr[mch.end()..cstr.len()-2];
+			let im = &cstr[mch.end()-1..cstr.len()-2];
 			match (real.parse::<f64>(), im.parse::<f64>()) {
 				(Ok(real), Ok(im)) => Ok(Complex::new(real, im)),
 				_ => Err("Bad format for complex number."),
@@ -119,6 +138,7 @@ fn construct_params(args: Vec<String>) -> Params {
 		window_width: 2.64,
 		window_center: Complex::new(-0.385, 0.297),
 		num_frames: 1,
+		anim_loop: 0,
 		c_init: Complex::new(-0.747, 0.2),
 		c_final: Complex::new(-0.747, 0.2),
 		title: String::from("bean"),
@@ -186,6 +206,12 @@ fn construct_params(args: Vec<String>) -> Params {
 			"num_frames"|"frames"|"nf" => {
 				match value.parse::<u64>() {
 					Ok(val) => params.num_frames = val,
+					Err(_) => println!("Error parsing value for {}.", field.as_str()),
+				}
+			},
+			"loop"|"anim_loop" => {
+				match value.parse::<u64>() {
+					Ok(val) => params.anim_loop = val,
 					Err(_) => println!("Error parsing value for {}.", field.as_str()),
 				}
 			},
