@@ -35,6 +35,11 @@ fn color_palette(pal: &str) -> [[u8; 3]; 5] {
 						[255, 130, 159],
 						[255, 200, 43],
 						[255, 230, 158]],
+		"underwater" => [[0, 0, 20],
+						[0, 43, 95],
+						[0, 78, 171],
+						[128, 255, 155],
+						[255, 255, 215]],
 		_ => [[0, 0, 0],
 						[100, 100, 100],
 						[150, 150, 150],
@@ -258,6 +263,7 @@ fn main() {
 	let height = (params.img_width as f64 / params.aspect_ratio) as u32;
 	// size of window in julia set
 	let win_width = params.window_width;
+	let win_height = params.window_width / params.aspect_ratio;
 	let scale = win_width/width as f64;
 
 	let mut buf = image::RgbImage::new(width, height);
@@ -273,7 +279,7 @@ fn main() {
 		// draw the picture
 		for (x, y, pixel) in buf.enumerate_pixels_mut() {
 			let zx = x as f64 * scale - win_width/2.0 + centerx;
-			let zy = (height-y) as f64 * scale - win_width/2.0 + centery;
+			let zy = (height-y) as f64 * scale - win_height/2.0 + centery;
 			let mut z = Complex::new(zx, zy);
 			// number of iterates it takes for z to escape
 			let mut count = 0;
@@ -290,7 +296,7 @@ fn main() {
 			let color_shift = (n as f64)/(num_frames as f64);
 			*pixel = image::Rgb(count_to_rgb(count, color_shift, &params.palette1, &params.palette2));
 		}
-		buf.save(format!("{}{}.png", params.title, n)).unwrap();
+		buf.save(format!("{}{:04}.png", params.title, n)).unwrap();
 	}
 
 }
